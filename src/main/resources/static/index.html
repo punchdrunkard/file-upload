@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>파일 업로드 성능 비교</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .upload-card {
+            transition: all 0.3s ease;
+            border-radius: 10px;
+        }
+
+        .upload-card:hover {
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+            transform: translateY(-5px);
+        }
+
+        .progress {
+            height: 25px;
+        }
+
+        .result-panel {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .chart-container {
+            height: 400px;
+        }
+
+        .stats-card {
+            font-size: 0.9em;
+        }
+
+        .spinner-border {
+            width: 1.5rem;
+            height: 1.5rem;
+        }
+    </style>
+</head>
+<body>
+<div class="container py-5">
+    <div class="row mb-4">
+        <div class="col-12 text-center">
+            <h1 class="display-4">대용량 파일 업로드 성능 비교</h1>
+            <p class="lead">Multipart vs ServletInputStream</p>
+        </div>
+    </div>
+
+    <!-- Test Configuration Card -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">테스트 설정</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="testFile" class="form-label">테스트 파일 선택</label>
+                                <input type="file" class="form-control" id="testFile">
+                            </div>
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="simulateNetwork">
+                                    <label class="form-check-label" for="simulateNetwork">
+                                        네트워크 지연 시뮬레이션 (300ms 지연)
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">선택한 파일 정보</label>
+                                <div class="alert alert-info" id="fileInfo">
+                                    파일을 선택해주세요.
+                                </div>
+                            </div>
+                            <button class="btn btn-primary w-100" id="runAllTests">모든 테스트 실행</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Method Cards -->
+    <div class="row mb-4">
+        <!-- Multipart Upload Card -->
+        <div class="col-md-6 mb-4">
+            <div class="card upload-card h-100">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Multipart 업로드</h5>
+                </div>
+                <div class="card-body d-flex flex-column">
+                    <p>전통적인 form-data 방식의 파일 업로드</p>
+                    <div class="progress mb-3">
+                        <div class="progress-bar progress-bar-striped" id="multipartProgress" role="progressbar"
+                             style="width: 0%"></div>
+                    </div>
+                    <div class="stats-card mb-3">
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <div class="border rounded p-2">
+                                    <small>소요 시간:</small>
+                                    <div id="multipartTime">-</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="border rounded p-2">
+                                    <small>메모리 사용:</small>
+                                    <div id="multipartMemory">-</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-auto">
+                        <button class="btn btn-success w-100" id="multipartUpload">
+                            테스트 시작
+                        </button>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <small class="text-muted">구현: Spring의 MultipartFile</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- ServletInputStream Upload Card -->
+        <div class="col-md-6 mb-4">
+            <div class="card upload-card h-100">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">ServletInputStream 업로드</h5>
+                </div>
+                <div class="card-body d-flex flex-column">
+                    <p>저수준 스트림 방식의 업로드</p>
+                    <div class="progress mb-3">
+                        <div class="progress-bar progress-bar-striped bg-warning text-dark" id="streamProgress"
+                             role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <div class="stats-card mb-3">
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <div class="border rounded p-2">
+                                    <small>소요 시간:</small>
+                                    <div id="streamTime">-</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="border rounded p-2">
+                                    <small>메모리 사용:</small>
+                                    <div id="streamMemory">-</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-auto">
+                        <button class="btn btn-warning w-100" id="streamUpload">
+                            테스트 시작
+                        </button>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <small class="text-muted">구현: HttpServletRequest.getInputStream()</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Comparison Section -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">성능 비교 결과</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-4">
+                            <h5>업로드 시간 비교</h5>
+                            <div class="chart-container">
+                                <canvas id="timeComparisonChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-4">
+                            <h5>메모리 사용량 비교</h5>
+                            <div class="chart-container">
+                                <canvas id="memoryComparisonChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-12">
+                            <h5>테스트 결과 로그</h5>
+                            <div class="result-panel alert alert-secondary">
+                                <div id="resultLog">
+                                    테스트를 시작하면 여기에 결과가 표시됩니다.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // App state
+    const state = {
+        charts: {
+            time: null,
+            memory: null
+        },
+        testResults: {
+            multipart: {time: 0, memory: 0, clientTime: 0},
+            stream: {time: 0, memory: 0, clientTime: 0}
+        },
+        methods: ['multipart', 'stream'],
+        methodConfigs: {
+            multipart: {
+                url: '/api/multipart/upload',
+                headers: {},
+                prepareData: (file) => {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    return formData;
+                },
+                color: {
+                    primary: 'rgba(40, 167, 69, 0.7)',
+                    border: 'rgba(40, 167, 69, 1)',
+                    light: 'rgba(40, 167, 69, 0.3)',
+                    lightBorder: 'rgba(40, 167, 69, 0.8)'
+                },
+                label: 'Multipart',
+                implementation: 'Spring의 MultipartFile'
+            },
+            stream: {
+                url: '/api/stream/upload',
+                headers: (file) => ({
+                    'X-File-Name': encodeURIComponent(file.name),
+                    'X-File-Size': file.size,
+                    'Content-Type': 'application/octet-stream'
+                }),
+                prepareData: (file) => file,
+                color: {
+                    primary: 'rgba(255, 193, 7, 0.7)',
+                    border: 'rgba(255, 193, 7, 1)',
+                    light: 'rgba(255, 193, 7, 0.3)',
+                    lightBorder: 'rgba(255, 193, 7, 0.8)'
+                },
+                label: 'ServletInputStream',
+                implementation: 'HttpServletRequest.getInputStream()'
+            }
+        }
+    };
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function () {
+        initializeCharts();
+        bindEventListeners();
+    });
+
+    // Initialize charts
+    function initializeCharts() {
+        // Time Comparison Chart
+        const timeCtx = document.getElementById('timeComparisonChart').getContext('2d');
+        state.charts.time = new Chart(timeCtx, {
+            type: 'bar',
+            data: {
+                labels: state.methods.map(method => state.methodConfigs[method].label),
+                datasets: [
+                    {
+                        label: '서버 측정 시간 (ms)',
+                        data: state.methods.map(() => 0),
+                        backgroundColor: state.methods.map(method => state.methodConfigs[method].color.primary),
+                        borderColor: state.methods.map(method => state.methodConfigs[method].color.border),
+                        borderWidth: 1
+                    },
+                    {
+                        label: '클라이언트 측정 시간 (ms)',
+                        data: state.methods.map(() => 0),
+                        backgroundColor: state.methods.map(method => state.methodConfigs[method].color.light),
+                        borderColor: state.methods.map(method => state.methodConfigs[method].color.lightBorder),
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: '시간 (ms)'
+                        }
+                    }
+                },
+                maintainAspectRatio: false
+            }
+        });
+
+        // Memory Comparison Chart
+        const memoryCtx = document.getElementById('memoryComparisonChart').getContext('2d');
+        state.charts.memory = new Chart(memoryCtx, {
+            type: 'bar',
+            data: {
+                labels: state.methods.map(method => state.methodConfigs[method].label),
+                datasets: [{
+                    label: '메모리 사용량 (MB)',
+                    data: state.methods.map(() => 0),
+                    backgroundColor: state.methods.map(method => state.methodConfigs[method].color.primary),
+                    borderColor: state.methods.map(method => state.methodConfigs[method].color.border),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: '메모리 (MB)'
+                        }
+                    }
+                },
+                maintainAspectRatio: false
+            }
+        });
+    }
+
+    // Bind event listeners
+    function bindEventListeners() {
+        // File selection event
+        document.getElementById('testFile').addEventListener('change', handleFileSelection);
+
+        // Test method buttons
+        state.methods.forEach(method => {
+            document.getElementById(`${method}Upload`).addEventListener('click', () => {
+                const file = document.getElementById('testFile').files[0];
+                if (file) {
+                    uploadFile(method, file);
+                } else {
+                    logMessage('파일을 먼저 선택해주세요!');
+                }
+            });
+        });
+
+        // Run all tests button
+        document.getElementById('runAllTests').addEventListener('click', runAllTests);
+    }
+
+    // Handle file selection
+    function handleFileSelection(e) {
+        const file = e.target.files[0];
+        if (file) {
+            updateFileInfo(file);
+        }
+    }
+
+    // Update file information display
+    function updateFileInfo(file) {
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        document.getElementById('fileInfo').innerHTML = `
+            <strong>파일명:</strong> ${file.name}<br>
+            <strong>크기:</strong> ${sizeMB} MB<br>
+            <strong>유형:</strong> ${file.type || '알 수 없음'}
+        `;
+    }
+
+    // Log messages to the result panel
+    function logMessage(message) {
+        const resultLog = document.getElementById('resultLog');
+        const timestamp = new Date().toLocaleTimeString();
+        resultLog.innerHTML = `<div>[${timestamp}] ${message}</div>` + resultLog.innerHTML;
+    }
+
+    // Update progress bar
+    function updateProgress(method, percentage) {
+        const progressBar = document.getElementById(`${method}Progress`);
+        progressBar.style.width = `${percentage}%`;
+        progressBar.innerText = `${Math.round(percentage)}%`;
+    }
+
+    // Update statistics display
+    function updateStats(method, time, memory) {
+        document.getElementById(`${method}Time`).innerText = `${time} ms`;
+        document.getElementById(`${method}Memory`).innerText = `${(memory / (1024 * 1024)).toFixed(2)} MB`;
+    }
+
+    // Reset progress and stats
+    function resetProgress(method) {
+        updateProgress(method, 0);
+        document.getElementById(`${method}Time`).innerText = '-';
+        document.getElementById(`${method}Memory`).innerText = '-';
+    }
+
+    // Update charts with current results
+    function updateCharts() {
+        // Update time chart
+        state.charts.time.data.datasets[0].data = state.methods.map(
+            method => state.testResults[method].time
+        );
+        state.charts.time.data.datasets[1].data = state.methods.map(
+            method => state.testResults[method].clientTime || 0
+        );
+        state.charts.time.update();
+
+        // Update memory chart
+        state.charts.memory.data.datasets[0].data = state.methods.map(
+            method => state.testResults[method].memory
+        );
+        state.charts.memory.update();
+    }
+
+    // Upload file using specified method
+    function uploadFile(method, file) {
+        resetProgress(method);
+        const config = state.methodConfigs[method];
+        logMessage(`${config.label} 업로드 시작: ${file.name}`);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', config.url, true);
+
+        // Add headers if present
+        if (typeof config.headers === 'function') {
+            const headers = config.headers(file);
+            Object.keys(headers).forEach(key => {
+                xhr.setRequestHeader(key, headers[key]);
+            });
+        } else if (config.headers) {
+            Object.keys(config.headers).forEach(key => {
+                xhr.setRequestHeader(key, config.headers[key]);
+            });
+        }
+
+        // Client-side time measurement
+        const clientStartTime = performance.now();
+
+        // Track upload progress
+        xhr.upload.addEventListener('progress', function (e) {
+            if (e.lengthComputable) {
+                const percentComplete = (e.loaded / e.total) * 100;
+                updateProgress(method, percentComplete);
+            }
+        });
+
+        xhr.onload = function () {
+            // Complete client-side time measurement
+            const clientEndTime = performance.now();
+            const clientTotalTime = Math.round(clientEndTime - clientStartTime);
+
+            if (xhr.status === 200) {
+                const response = JSON.parse(xhr.responseText);
+
+                // Store results
+                state.testResults[method] = {
+                    time: response.uploadTimeMs,
+                    memory: response.memoryUsedBytes / (1024 * 1024),
+                    clientTime: clientTotalTime
+                };
+
+                // Update UI
+                updateProgress(method, 100);
+                updateStats(method, response.uploadTimeMs, response.memoryUsedBytes);
+                logMessage(`${config.label} 업로드 완료:
+                    서버 측정 시간: ${response.uploadTimeMs}ms,
+                    클라이언트 측정 시간: ${clientTotalTime}ms,
+                    메모리: ${(response.memoryUsedBytes / (1024 * 1024)).toFixed(2)}MB`);
+                updateCharts();
+            } else {
+                logMessage(`${config.label} 업로드 실패: ${xhr.status} ${xhr.statusText}`);
+            }
+        };
+
+        xhr.onerror = function () {
+            logMessage(`${config.label} 업로드 중 네트워크 오류 발생`);
+        };
+
+        // Prepare data
+        const data = config.prepareData(file);
+
+        // Apply network delay simulation if checked
+        if (document.getElementById('simulateNetwork').checked) {
+            logMessage('네트워크 지연 시뮬레이션 적용 (300ms)');
+            setTimeout(() => xhr.send(data), 300);
+        } else {
+            xhr.send(data);
+        }
+    }
+
+    // Run all tests sequentially
+    function runAllTests() {
+        const file = document.getElementById('testFile').files[0];
+        if (!file) {
+            logMessage('파일을 먼저 선택해주세요!');
+            return;
+        }
+
+        logMessage('모든 테스트 실행 시작...');
+
+        // Run the first method
+        uploadFile(state.methods[0], file);
+
+        // Set up sequence of tests
+        let currentMethodIndex = 0;
+
+        const runNextTest = setInterval(() => {
+            if (state.testResults[state.methods[currentMethodIndex]].time > 0) {
+                currentMethodIndex++;
+
+                // If there are more methods to test
+                if (currentMethodIndex < state.methods.length) {
+                    setTimeout(() => uploadFile(state.methods[currentMethodIndex], file), 1000);
+                } else {
+                    // All tests completed
+                    clearInterval(runNextTest);
+                    compareResults(file);
+                }
+            }
+        }, 500);
+    }
+
+    // Compare and analyze test results
+    function compareResults(file) {
+        logMessage('==== 테스트 결과 비교 ====');
+
+        // Server-measured time comparison
+        const times = state.methods.map(method => ({
+            method: state.methodConfigs[method].label,
+            time: state.testResults[method].time
+        })).sort((a, b) => a.time - b.time);
+
+        logMessage(`서버 측정 시간 순위: ${times.map((item, index) =>
+            `${index + 1}. ${item.method} (${item.time}ms)`).join(', ')}`);
+
+        // Client-measured time comparison
+        const clientTimes = state.methods.map(method => ({
+            method: state.methodConfigs[method].label,
+            time: state.testResults[method].clientTime
+        })).sort((a, b) => a.time - b.time);
+
+        logMessage(`클라이언트 측정 시간 순위: ${clientTimes.map((item, index) =>
+            `${index + 1}. ${item.method} (${item.time}ms)`).join(', ')}`);
+
+        // Memory usage comparison
+        const memories = state.methods.map(method => ({
+            method: state.methodConfigs[method].label,
+            memory: state.testResults[method].memory
+        })).sort((a, b) => a.memory - b.memory);
+
+        logMessage(`메모리 사용량 순위: ${memories.map((item, index) =>
+            `${index + 1}. ${item.method} (${item.memory.toFixed(2)}MB)`).join(', ')}`);
+
+        // Comprehensive analysis
+        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        logMessage(`테스트 파일 크기: ${fileSizeMB}MB`);
+
+        // Generate recommendation based on file size and results
+        let recommendation = '';
+        if (fileSizeMB < 10) {
+            if (times[0].method === 'Multipart') {
+                recommendation = '작은 파일에는 Multipart 방식이 효율적입니다.';
+            } else {
+                recommendation = `작은 파일임에도 ${times[0].method}가 더 효율적입니다.`;
+            }
+        } else if (fileSizeMB < 100) {
+            if (times[0].method === 'ServletInputStream') {
+                recommendation = '중간 크기 파일에는 ServletInputStream 방식이 효율적입니다.';
+            } else {
+                recommendation = `중간 크기 파일에는 ${times[0].method}가 더 효율적입니다.`;
+            }
+        } else {
+            if (memories[0].method === 'ServletInputStream') {
+                recommendation = '대용량 파일의 메모리 효율성은 ServletInputStream이 우수합니다.';
+            } else {
+                recommendation = `대용량 파일 처리에는 ${memories[0].method}의 메모리 효율이 가장 좋습니다.`;
+            }
+        }
+
+        logMessage(`결론: ${recommendation}`);
+    }
+</script>
+</body>
+</html>
