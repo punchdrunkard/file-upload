@@ -1,0 +1,29 @@
+spring:
+  servlet:
+    multipart:
+      max-file-size: 11GB
+      max-request-size: 11GB
+      enabled: true
+      file-size-threshold: 0
+
+server:
+  tomcat:
+    max-swallow-size: -1
+    max-http-form-post-size: -1
+
+app:
+  upload:
+    dir: uploads
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    prometheus:
+      access: unrestricted
+  prometheus:
+    metrics:
+      export:
+        enabled: true
